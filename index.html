@@ -105,7 +105,6 @@
     </div>
     <div class="image-container" id="imageContainer">
       <div id="loadingSpinner" class="loading" style="display: none;"></div>
-      <img id="generatedImage" class="generated-image" style="display: none;">
       <div id="placeholderText" class="placeholder-text">Enter a prompt to generate an image</div>
     </div>
   </div>
@@ -115,7 +114,6 @@
       const promptInput = document.getElementById('promptInput');
       const imageContainer = document.getElementById('imageContainer');
       const loadingSpinner = document.getElementById('loadingSpinner');
-      const generatedImage = document.getElementById('generatedImage');
       const placeholderText = document.getElementById('placeholderText');
       
       if (!promptInput.value.trim()) {
@@ -125,12 +123,26 @@
 
       // Show loading spinner and hide placeholder
       loadingSpinner.style.display = 'block';
-      generatedImage.style.display = 'none';
       placeholderText.style.display = 'none';
+
+      // Remove any existing image
+      const existingImage = document.getElementById('generatedImage');
+      if (existingImage) {
+        existingImage.remove();
+      }
+
+      // Create new image element
+      const generatedImage = document.createElement('img');
+      generatedImage.id = 'generatedImage';
+      generatedImage.className = 'generated-image';
+      generatedImage.style.display = 'none';
 
       // Set the image source and alt to exactly the prompt text
       generatedImage.src = promptInput.value;
       generatedImage.alt = promptInput.value;
+
+      // Add the new image to the container
+      imageContainer.appendChild(generatedImage);
 
       // Handle successful image load
       generatedImage.onload = function() {
