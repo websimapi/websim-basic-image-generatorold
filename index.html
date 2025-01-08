@@ -1,4 +1,4 @@
-<html><head><base href="." /><title>Basic Image Generator</title>
+<html><head><base href="."><title>Basic Image Generator</title>
 <style>
   * {
     margin: 0;
@@ -104,6 +104,10 @@
     width: 150px;
   }
 
+  .opacity-slider {
+    width: 150px;
+  }
+
   .tool-group {
     display: flex;
     gap: 0.5rem;
@@ -173,10 +177,12 @@
       <canvas id="editCanvas" style="display: none;"></canvas>
       <div class="editor-controls" id="editorControls" style="display: none;">
         <div class="tool-group">
-          <button class="tool-button active" onclick="setTool('brush')" id="brushTool">Brush</button>
-          <button class="tool-button" onclick="setTool('eraser')" id="eraserTool">Eraser</button>
-          <button class="tool-button" onclick="setTool('colorPicker')" id="colorPickerTool">Color Picker</button>
-          <button class="tool-button" onclick="setTool('magicWand')" id="magicWandTool">Magic Wand</button>
+          <button class="tool-button active" onclick="setTool(&apos;brush&apos;)" id="brushTool">Brush</button>
+          <button class="tool-button" onclick="setTool(&apos;eraser&apos;)" id="eraserTool">Eraser</button>
+          <button class="tool-button" onclick="setTool(&apos;colorPicker&apos;)" id="colorPickerTool">Color Picker</button>
+          <button class="tool-button" onclick="setTool(&apos;magicWand&apos;)" id="magicWandTool">Magic Wand</button>
+          <button class="tool-button" onclick="setTool(&apos;fillSelection&apos;)" id="fillSelectionTool">Fill Selection</button>
+          <button class="tool-button" onclick="clearSelection()" id="clearSelectionTool">Clear Selection</button>
         </div>
         <div class="tool-group">
           <input type="color" id="colorPicker" class="color-picker" value="#ffffff">
@@ -184,6 +190,8 @@
           <span id="brushSizeLabel">10px</span>
           <input type="range" id="toleranceSlider" class="tolerance-slider" min="0" max="255" value="32">
           <span id="toleranceLabel">Tolerance: 32</span>
+          <input type="range" id="selectionOpacity" class="opacity-slider" min="0" max="100" value="100">
+          <span id="opacityLabel">Opacity: 100%</span>
         </div>
         <button onclick="resetImage()">Reset Image</button>
         <button onclick="saveImage()">Save Image</button>
@@ -191,251 +199,233 @@
     </div>
   </div>
 
-  <script>
-    let imageCounter = 0;
-    let originalImageData = null;
-    let currentImage = null;
-    let isDrawing = false;
-    let currentTool = 'brush';
-    let lastX = 0;
-    let lastY = 0;
-    let selectionData = null;
-
-    function generateImage() {
-      const promptInput = document.getElementById('promptInput');
-      const imageContainer = document.getElementById('imageContainer');
-      const loadingSpinner = document.getElementById('loadingSpinner');
-      const placeholderText = document.getElementById('placeholderText');
-      const editorControls = document.getElementById('editorControls');
-      const canvas = document.getElementById('editCanvas');
-      
-      if (!promptInput.value.trim()) {
-        alert('Please enter a prompt!');
-        return;
+  <script>let imageCounter = 0;
+let originalImageData = null;
+let currentImage = null;
+let isDrawing = false;
+let currentTool = 'brush';
+let lastX = 0;
+let lastY = 0;
+let selectionData = null;
+let currentSelection = null;
+function generateImage() {
+  const promptInput = document.getElementById('promptInput');
+  const imageContainer = document.getElementById('imageContainer');
+  const loadingSpinner = document.getElementById('loadingSpinner');
+  const placeholderText = document.getElementById('placeholderText');
+  const editorControls = document.getElementById('editorControls');
+  const canvas = document.getElementById('editCanvas');
+  if (!promptInput.value.trim()) {
+    alert('Please enter a prompt!');
+    return;
+  }
+  loadingSpinner.style.display = 'block';
+  placeholderText.style.display = 'none';
+  editorControls.style.display = 'none';
+  canvas.style.display = 'none';
+  const existingImages = imageContainer.querySelectorAll('img');
+  existingImages.forEach(img => img.remove());
+  const generatedImage = document.createElement('img');
+  generatedImage.id = `generatedImage_${imageCounter++}`;
+  generatedImage.className = 'generated-image';
+  generatedImage.style.display = 'none';
+  generatedImage.crossOrigin = 'anonymous';
+  generatedImage.src = promptInput.value;
+  generatedImage.alt = promptInput.value;
+  imageContainer.appendChild(generatedImage);
+  generatedImage.onload = function () {
+    loadingSpinner.style.display = 'none';
+    generatedImage.style.display = 'block';
+    currentImage = generatedImage;
+    setupImageEditor();
+  };
+  generatedImage.onerror = function () {
+    loadingSpinner.style.display = 'none';
+    generatedImage.style.display = 'block';
+  };
+}
+function setupImageEditor() {
+  const canvas = document.getElementById('editCanvas');
+  const ctx = canvas.getContext('2d');
+  const editorControls = document.getElementById('editorControls');
+  canvas.width = currentImage.naturalWidth;
+  canvas.height = currentImage.naturalHeight;
+  ctx.drawImage(currentImage, 0, 0);
+  originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  editorControls.style.display = 'flex';
+  currentImage.style.display = 'none';
+  canvas.style.display = 'block';
+  setupCanvasListeners();
+}
+function setupCanvasListeners() {
+  const canvas = document.getElementById('editCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.addEventListener('mousedown', startDrawing);
+  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', stopDrawing);
+  canvas.addEventListener('mouseout', stopDrawing);
+  function startDrawing(e) {
+    isDrawing = true;
+    [lastX, lastY] = getMousePos(canvas, e);
+    if (currentTool === 'magicWand') {
+      const [x, y] = getMousePos(canvas, e);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const tolerance = parseInt(document.getElementById('toleranceSlider').value);
+      currentSelection = magicWandSelect(imageData, Math.round(x), Math.round(y), tolerance);
+      drawSelectionOverlay(currentSelection);
+    }
+  }
+  function draw(e) {
+    if (!isDrawing || currentTool === 'magicWand') return;
+    const [currentX, currentY] = getMousePos(canvas, e);
+    const brushSize = document.getElementById('brushSize').value;
+    const color = document.getElementById('colorPicker').value;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = brushSize;
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(currentX, currentY);
+    if (currentTool === 'brush') {
+      ctx.strokeStyle = color;
+    } else if (currentTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    }
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    [lastX, lastY] = [currentX, currentY];
+  }
+  function stopDrawing() {
+    isDrawing = false;
+  }
+}
+function magicWandSelect(imageData, startX, startY, tolerance) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const pixels = imageData.data;
+  const visited = new Uint8Array(width * height);
+  const selected = new Uint8Array(width * height);
+  const startPos = (startY * width + startX) * 4;
+  const startR = pixels[startPos];
+  const startG = pixels[startPos + 1];
+  const startB = pixels[startPos + 2];
+  const stack = [[startX, startY]];
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    const pos = y * width + x;
+    if (x < 0 || x >= width || y < 0 || y >= height || visited[pos]) {
+      continue;
+    }
+    const pixelPos = pos * 4;
+    const r = pixels[pixelPos];
+    const g = pixels[pixelPos + 1];
+    const b = pixels[pixelPos + 2];
+    const colorDiff = Math.sqrt(Math.pow(r - startR, 2) + Math.pow(g - startG, 2) + Math.pow(b - startB, 2));
+    if (colorDiff <= tolerance) {
+      visited[pos] = 1;
+      selected[pos] = 1;
+      stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+    }
+  }
+  return selected;
+}
+function drawSelectionOverlay(selected) {
+  currentSelection = selected;
+  const canvas = document.getElementById('editCanvas');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.putImageData(originalImageData, 0, 0);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  for (let i = 0; i < selected.length; i++) {
+    if (selected[i]) {
+      const pixelPos = i * 4;
+      pixels[pixelPos + 3] = Math.min(pixels[pixelPos + 3], 128);
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+function getMousePos(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return [(e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY];
+}
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(`${tool}Tool`).classList.add('active');
+  const canvas = document.getElementById('editCanvas');
+  if (tool === 'fillSelection' && currentSelection) {
+    fillSelection();
+  } else {
+    canvas.className = tool === 'magicWand' ? 'magic-wand' : '';
+  }
+}
+function resetImage() {
+  const canvas = document.getElementById('editCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.putImageData(originalImageData, 0, 0);
+}
+function saveImage() {
+  const canvas = document.getElementById('editCanvas');
+  const link = document.createElement('a');
+  link.download = 'edited-image.png';
+  link.href = canvas.toDataURL();
+  link.click();
+}
+function fillSelection() {
+  if (!currentSelection) return;
+  const canvas = document.getElementById('editCanvas');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+  const color = document.getElementById('colorPicker').value;
+  const opacity = document.getElementById('selectionOpacity').value / 100;
+  const r = parseInt(color.substr(1, 2), 16);
+  const g = parseInt(color.substr(3, 2), 16);
+  const b = parseInt(color.substr(5, 2), 16);
+  for (let i = 0; i < currentSelection.length; i++) {
+    if (currentSelection[i]) {
+      const pixelPos = i * 4;
+      if (opacity < 1) {
+        pixels[pixelPos + 3] = Math.round(pixels[pixelPos + 3] * opacity);
+      } else {
+        pixels[pixelPos] = r;
+        pixels[pixelPos + 1] = g;
+        pixels[pixelPos + 2] = b;
       }
-
-      loadingSpinner.style.display = 'block';
-      placeholderText.style.display = 'none';
-      editorControls.style.display = 'none';
-      canvas.style.display = 'none';
-
-      const existingImages = imageContainer.querySelectorAll('img');
-      existingImages.forEach(img => img.remove());
-
-      const generatedImage = document.createElement('img');
-      generatedImage.id = `generatedImage_${imageCounter++}`;
-      generatedImage.className = 'generated-image';
-      generatedImage.style.display = 'none';
-      generatedImage.crossOrigin = 'anonymous';
-
-      generatedImage.src = promptInput.value;
-      generatedImage.alt = promptInput.value;
-
-      imageContainer.appendChild(generatedImage);
-
-      generatedImage.onload = function() {
-        loadingSpinner.style.display = 'none';
-        generatedImage.style.display = 'block';
-        currentImage = generatedImage;
-        setupImageEditor();
-      };
-
-      generatedImage.onerror = function() {
-        loadingSpinner.style.display = 'none';
-        generatedImage.style.display = 'block';
-      };
     }
-
-    function setupImageEditor() {
-      const canvas = document.getElementById('editCanvas');
-      const ctx = canvas.getContext('2d');
-      const editorControls = document.getElementById('editorControls');
-
-      canvas.width = currentImage.naturalWidth;
-      canvas.height = currentImage.naturalHeight;
-
-      ctx.drawImage(currentImage, 0, 0);
-      originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      editorControls.style.display = 'flex';
-      currentImage.style.display = 'none';
-      canvas.style.display = 'block';
-
-      setupCanvasListeners();
-    }
-
-    function setupCanvasListeners() {
-      const canvas = document.getElementById('editCanvas');
-      const ctx = canvas.getContext('2d');
-
-      canvas.addEventListener('mousedown', startDrawing);
-      canvas.addEventListener('mousemove', draw);
-      canvas.addEventListener('mouseup', stopDrawing);
-      canvas.addEventListener('mouseout', stopDrawing);
-
-      function startDrawing(e) {
-        isDrawing = true;
-        [lastX, lastY] = getMousePos(canvas, e);
-
-        if (currentTool === 'magicWand') {
-          const [x, y] = getMousePos(canvas, e);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const tolerance = parseInt(document.getElementById('toleranceSlider').value);
-          selectionData = magicWandSelect(imageData, Math.round(x), Math.round(y), tolerance);
-          drawSelectionOverlay(selectionData);
-        }
-      }
-
-      function draw(e) {
-        if (!isDrawing || currentTool === 'magicWand') return;
-
-        const [currentX, currentY] = getMousePos(canvas, e);
-        const brushSize = document.getElementById('brushSize').value;
-        const color = document.getElementById('colorPicker').value;
-
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.lineWidth = brushSize;
-
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(currentX, currentY);
-
-        if (currentTool === 'brush') {
-          ctx.strokeStyle = color;
-        } else if (currentTool === 'eraser') {
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.strokeStyle = 'rgba(0,0,0,1)';
-        }
-
-        ctx.stroke();
-        ctx.globalCompositeOperation = 'source-over';
-
-        [lastX, lastY] = [currentX, currentY];
-      }
-
-      function stopDrawing() {
-        isDrawing = false;
-      }
-    }
-
-    function magicWandSelect(imageData, startX, startY, tolerance) {
-      const width = imageData.width;
-      const height = imageData.height;
-      const pixels = imageData.data;
-      const visited = new Uint8Array(width * height);
-      const selected = new Uint8Array(width * height);
-      
-      const startPos = (startY * width + startX) * 4;
-      const startR = pixels[startPos];
-      const startG = pixels[startPos + 1];
-      const startB = pixels[startPos + 2];
-
-      const stack = [[startX, startY]];
-      
-      while (stack.length) {
-        const [x, y] = stack.pop();
-        const pos = y * width + x;
-
-        if (x < 0 || x >= width || y < 0 || y >= height || visited[pos]) {
-          continue;
-        }
-
-        const pixelPos = pos * 4;
-        const r = pixels[pixelPos];
-        const g = pixels[pixelPos + 1];
-        const b = pixels[pixelPos + 2];
-
-        const colorDiff = Math.sqrt(
-          Math.pow(r - startR, 2) +
-          Math.pow(g - startG, 2) +
-          Math.pow(b - startB, 2)
-        );
-
-        if (colorDiff <= tolerance) {
-          visited[pos] = 1;
-          selected[pos] = 1;
-          
-          stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
-        }
-      }
-
-      return selected;
-    }
-
-    function drawSelectionOverlay(selected) {
-      const canvas = document.getElementById('editCanvas');
-      const ctx = canvas.getContext('2d');
-      const width = canvas.width;
-      const height = canvas.height;
-
-      // Clear previous selection by redrawing the image
-      ctx.putImageData(originalImageData, 0, 0);
-
-      // Draw selection overlay
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const pixels = imageData.data;
-
-      for (let i = 0; i < selected.length; i++) {
-        if (selected[i]) {
-          const pixelPos = i * 4;
-          // Add a semi-transparent overlay to selected pixels
-          pixels[pixelPos + 3] = Math.min(pixels[pixelPos + 3], 128);
-        }
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-    }
-
-    function getMousePos(canvas, e) {
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      return [
-        (e.clientX - rect.left) * scaleX,
-        (e.clientY - rect.top) * scaleY
-      ];
-    }
-
-    function setTool(tool) {
-      currentTool = tool;
-      document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
-      document.getElementById(`${tool}Tool`).classList.add('active');
-
-      const canvas = document.getElementById('editCanvas');
-      canvas.className = tool === 'magicWand' ? 'magic-wand' : '';
-    }
-
-    function resetImage() {
-      const canvas = document.getElementById('editCanvas');
-      const ctx = canvas.getContext('2d');
-      ctx.putImageData(originalImageData, 0, 0);
-    }
-
-    function saveImage() {
-      const canvas = document.getElementById('editCanvas');
-      const link = document.createElement('a');
-      link.download = 'edited-image.png';
-      link.href = canvas.toDataURL();
-      link.click();
-    }
-
-    document.getElementById('brushSize').addEventListener('input', function(e) {
-      document.getElementById('brushSizeLabel').textContent = `${e.target.value}px`;
-    });
-
-    document.getElementById('promptInput').addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        generateImage();
-      }
-    });
-
-    document.getElementById('toleranceSlider').addEventListener('input', function(e) {
-      document.getElementById('toleranceLabel').textContent = `Tolerance: ${e.target.value}`;
-      if (selectionData && currentTool === 'magicWand') {
-        drawSelectionOverlay(selectionData);
-      }
-    });
-  </script>
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+function clearSelection() {
+  currentSelection = null;
+  resetImage();
+}
+document.getElementById('brushSize').addEventListener('input', function (e) {
+  document.getElementById('brushSizeLabel').textContent = `${e.target.value}px`;
+});
+document.getElementById('promptInput').addEventListener('keypress', function (e) {
+  if (e.key === 'Enter') {
+    generateImage();
+  }
+});
+document.getElementById('toleranceSlider').addEventListener('input', function (e) {
+  document.getElementById('toleranceLabel').textContent = `Tolerance: ${e.target.value}`;
+  if (selectionData && currentTool === 'magicWand') {
+    drawSelectionOverlay(selectionData);
+  }
+});
+document.getElementById('selectionOpacity').addEventListener('input', function (e) {
+  document.getElementById('opacityLabel').textContent = `Opacity: ${e.target.value}%`;
+  if (currentSelection && currentTool === 'fillSelection') {
+    fillSelection();
+  }
+});</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body></html>
