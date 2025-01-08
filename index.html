@@ -1,0 +1,149 @@
+<html><head><base href="." /><title>Basic Image Generator</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: white;
+    font-family: Arial, sans-serif;
+    padding: 2rem;
+  }
+
+  .container {
+    max-width: 800px;
+    width: 100%;
+    text-align: center;
+  }
+
+  h1 {
+    margin-bottom: 2rem;
+    font-size: 2.5rem;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .input-group {
+    margin-bottom: 2rem;
+  }
+
+  input {
+    width: 70%;
+    padding: 1rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 5px;
+    margin-right: 1rem;
+    background: rgba(255,255,255,0.1);
+    color: white;
+  }
+
+  button {
+    padding: 1rem 2rem;
+    font-size: 1rem;
+    background: #4CAF50;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  button:hover {
+    transform: scale(1.05);
+  }
+
+  .image-container {
+    margin-top: 2rem;
+    padding: 1rem;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .generated-image {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: 5px;
+  }
+
+  .loading {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #4CAF50;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>AI Image Generator</h1>
+    <div class="input-group">
+      <input type="text" id="promptInput" placeholder="Enter your image prompt here...">
+      <button onclick="generateImage()">Generate</button>
+    </div>
+    <div class="image-container" id="imageContainer">
+      <div id="loadingSpinner" class="loading" style="display: none;"></div>
+      <img id="generatedImage" class="generated-image" style="display: none;">
+    </div>
+  </div>
+
+  <script>
+    function generateImage() {
+      const promptInput = document.getElementById('promptInput');
+      const imageContainer = document.getElementById('imageContainer');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      const generatedImage = document.getElementById('generatedImage');
+      
+      if (!promptInput.value.trim()) {
+        alert('Please enter a prompt!');
+        return;
+      }
+
+      // Show loading spinner
+      loadingSpinner.style.display = 'block';
+      generatedImage.style.display = 'none';
+
+      // Set the image source and alt to the prompt
+      generatedImage.src = promptInput.value;
+      generatedImage.alt = promptInput.value;
+
+      // Simulate loading time (remove this in production)
+      setTimeout(() => {
+        // Hide loading spinner and show image
+        loadingSpinner.style.display = 'none';
+        generatedImage.style.display = 'block';
+      }, 1000);
+
+      // Handle image load error
+      generatedImage.onerror = function() {
+        loadingSpinner.style.display = 'none';
+        alert('Failed to generate image. Please try again.');
+      };
+    }
+
+    // Allow Enter key to trigger generation
+    document.getElementById('promptInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        generateImage();
+      }
+    });
+  </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>
