@@ -69,6 +69,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    position: relative;
   }
 
   .editor-controls {
@@ -96,6 +97,31 @@
     max-height: 500px;
     border-radius: 5px;
     display: none;
+    cursor: crosshair;
+  }
+
+  .brush-size-slider {
+    width: 150px;
+  }
+
+  .tool-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .tool-button {
+    padding: 0.5rem 1rem;
+    background: #2196F3;
+    border: none;
+    border-radius: 3px;
+    color: white;
+    cursor: pointer;
+  }
+
+  .tool-button.active {
+    background: #1976D2;
+    box-shadow: 0 0 5px rgba(255,255,255,0.3);
   }
 
   .generated-image {
@@ -136,10 +162,18 @@
       <div id="placeholderText" class="placeholder-text">Enter a prompt to generate an image</div>
       <canvas id="editCanvas" style="display: none;"></canvas>
       <div class="editor-controls" id="editorControls" style="display: none;">
-        <input type="color" id="colorPicker" class="color-picker" value="#ffffff">
-        <input type="range" id="toleranceSlider" class="tolerance-slider" min="0" max="100" value="30">
-        <button onclick="removeColor()">Remove Selected Color</button>
+        <div class="tool-group">
+          <button class="tool-button active" onclick="setTool('brush')" id="brushTool">Brush</button>
+          <button class="tool-button" onclick="setTool('eraser')" id="eraserTool">Eraser</button>
+          <button class="tool-button" onclick="setTool('colorPicker')" id="colorPickerTool">Color Picker</button>
+        </div>
+        <div class="tool-group">
+          <input type="color" id="colorPicker" class="color-picker" value="#ffffff">
+          <input type="range" id="brushSize" class="brush-size-slider" min="1" max="50" value="10">
+          <span id="brushSizeLabel">10px</span>
+        </div>
         <button onclick="resetImage()">Reset Image</button>
+        <button onclick="saveImage()">Save Image</button>
       </div>
     </div>
   </div>
@@ -148,6 +182,10 @@
     let imageCounter = 0;
     let originalImageData = null;
     let currentImage = null;
+    let isDrawing = false;
+    let currentTool = 'brush';
+    let lastX = 0;
+    let lastY = 0;
 
     function generateImage() {
       const promptInput = document.getElementById('promptInput');
@@ -162,31 +200,25 @@
         return;
       }
 
-      // Show loading spinner and hide placeholder
       loadingSpinner.style.display = 'block';
       placeholderText.style.display = 'none';
       editorControls.style.display = 'none';
       canvas.style.display = 'none';
 
-      // Remove any existing images
       const existingImages = imageContainer.querySelectorAll('img');
       existingImages.forEach(img => img.remove());
 
-      // Create new image element with unique ID
       const generatedImage = document.createElement('img');
       generatedImage.id = `generatedImage_${imageCounter++}`;
       generatedImage.className = 'generated-image';
       generatedImage.style.display = 'none';
-      generatedImage.crossOrigin = 'anonymous';  // Enable CORS
+      generatedImage.crossOrigin = 'anonymous';
 
-      // Set the image source and alt to exactly the prompt text
       generatedImage.src = promptInput.value;
       generatedImage.alt = promptInput.value;
 
-      // Add the new image to the container
       imageContainer.appendChild(generatedImage);
 
-      // Handle successful image load
       generatedImage.onload = function() {
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
@@ -194,7 +226,6 @@
         setupImageEditor();
       };
 
-      // Handle image load error
       generatedImage.onerror = function() {
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
@@ -206,47 +237,80 @@
       const ctx = canvas.getContext('2d');
       const editorControls = document.getElementById('editorControls');
 
-      // Set canvas dimensions to match the image
       canvas.width = currentImage.naturalWidth;
       canvas.height = currentImage.naturalHeight;
 
-      // Draw image on canvas
       ctx.drawImage(currentImage, 0, 0);
-
-      // Store original image data
       originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-      // Show editor controls
       editorControls.style.display = 'flex';
       currentImage.style.display = 'none';
       canvas.style.display = 'block';
+
+      setupCanvasListeners();
     }
 
-    function removeColor() {
+    function setupCanvasListeners() {
       const canvas = document.getElementById('editCanvas');
       const ctx = canvas.getContext('2d');
-      const colorPicker = document.getElementById('colorPicker');
-      const toleranceSlider = document.getElementById('toleranceSlider');
 
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      // Convert selected color to RGB
-      const selectedColor = hexToRgb(colorPicker.value);
-      const tolerance = parseInt(toleranceSlider.value);
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
 
-      // Process each pixel
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-
-        if (colorMatch(r, g, b, selectedColor.r, selectedColor.g, selectedColor.b, tolerance)) {
-          data[i + 3] = 0; // Set alpha to 0 (transparent)
-        }
+      function startDrawing(e) {
+        isDrawing = true;
+        [lastX, lastY] = getMousePos(canvas, e);
       }
 
-      ctx.putImageData(imageData, 0, 0);
+      function draw(e) {
+        if (!isDrawing) return;
+
+        const [currentX, currentY] = getMousePos(canvas, e);
+        const brushSize = document.getElementById('brushSize').value;
+        const color = document.getElementById('colorPicker').value;
+
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = brushSize;
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(currentX, currentY);
+
+        if (currentTool === 'brush') {
+          ctx.strokeStyle = color;
+        } else if (currentTool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.strokeStyle = 'rgba(0,0,0,1)';
+        }
+
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+
+        [lastX, lastY] = [currentX, currentY];
+      }
+
+      function stopDrawing() {
+        isDrawing = false;
+      }
+    }
+
+    function getMousePos(canvas, e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return [
+        (e.clientX - rect.left) * scaleX,
+        (e.clientY - rect.top) * scaleY
+      ];
+    }
+
+    function setTool(tool) {
+      currentTool = tool;
+      document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`${tool}Tool`).classList.add('active');
     }
 
     function resetImage() {
@@ -255,25 +319,18 @@
       ctx.putImageData(originalImageData, 0, 0);
     }
 
-    function hexToRgb(hex) {
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      } : null;
+    function saveImage() {
+      const canvas = document.getElementById('editCanvas');
+      const link = document.createElement('a');
+      link.download = 'edited-image.png';
+      link.href = canvas.toDataURL();
+      link.click();
     }
 
-    function colorMatch(r1, g1, b1, r2, g2, b2, tolerance) {
-      const diff = Math.sqrt(
-        Math.pow(r1 - r2, 2) +
-        Math.pow(g1 - g2, 2) +
-        Math.pow(b1 - b2, 2)
-      );
-      return diff <= tolerance;
-    }
+    document.getElementById('brushSize').addEventListener('input', function(e) {
+      document.getElementById('brushSizeLabel').textContent = `${e.target.value}px`;
+    });
 
-    // Allow Enter key to trigger generation
     document.getElementById('promptInput').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         generateImage();
