@@ -169,6 +169,16 @@
     left: 0;
     pointer-events: none;
   }
+
+  .magic-wand-settings {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  #outlineWidth {
+    width: 100px;
+  }
 </style>
 </head>
 <body>
@@ -201,6 +211,16 @@
           <span id="brushSizeLabel">10px</span>
           <input type="range" id="toleranceSlider" class="tolerance-slider" min="0" max="255" value="32">
           <span id="toleranceLabel">Tolerance: 32</span>
+          <div class="tool-group magic-wand-settings" style="display: none;">
+            <input type="range" id="outlineWidth" min="1" max="10" value="1">
+            <span id="outlineWidthLabel">Outline: 1px</span>
+            <select id="outlineStyle">
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="dotted">Dotted</option>
+            </select>
+            <input type="color" id="outlineColor" value="#ffffff">
+          </div>
           <input type="range" id="selectionOpacity" class="opacity-slider" min="0" max="100" value="100">
           <span id="opacityLabel">Opacity: 100%</span>
         </div>
@@ -357,6 +377,22 @@ function magicWandSelect(imageData, startX, startY, tolerance) {
   }
   return selected;
 }
+function findNextBoundaryPixel(selected, x, y, width, height, visited) {
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (let i = 0; i < directions.length; i++) {
+    const newX = x + directions[i][0];
+    const newY = y + directions[i][1];
+    if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
+      const newPos = newY * width + newX;
+      if (selected[newPos] && !visited.has(newPos)) {
+        if (x > 0 && !selected[newPos - 1] || x < width - 1 && !selected[newPos + 1] || y > 0 && !selected[newPos - width] || y < height - 1 && !selected[newPos + width]) {
+          return [newX, newY];
+        }
+      }
+    }
+  }
+  return null;
+}
 function drawSelectionOverlay(selected) {
   currentSelection = selected;
   const canvas = document.getElementById('editCanvas');
@@ -370,16 +406,35 @@ function drawSelectionOverlay(selected) {
   outlineCanvas.width = width;
   outlineCanvas.height = height;
   const outlineCtx = outlineCanvas.getContext('2d');
-  outlineCtx.strokeStyle = 'white';
-  outlineCtx.lineWidth = 1;
+  const outlineWidth = parseInt(document.getElementById('outlineWidth').value);
+  const outlineStyle = document.getElementById('outlineStyle').value;
+  const outlineColor = document.getElementById('outlineColor').value;
+  outlineCtx.strokeStyle = outlineColor;
+  outlineCtx.lineWidth = outlineWidth;
+  if (outlineStyle === 'dashed') {
+    outlineCtx.setLineDash([5, 5]);
+  } else if (outlineStyle === 'dotted') {
+    outlineCtx.setLineDash([2, 2]);
+  }
+  const visited = new Set();
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const pos = y * width + x;
-      if (selected[pos]) {
-        const isEdge = x > 0 && !selected[pos - 1] || x < width - 1 && !selected[pos + 1] || y > 0 && !selected[pos - width] || y < height - 1 && !selected[pos + width];
-        if (isEdge) {
-          outlineCtx.beginPath();
-          outlineCtx.rect(x, y, 1, 1);
+      if (selected[pos] && !visited.has(pos)) {
+        outlineCtx.beginPath();
+        let current = [x, y];
+        let contour = [];
+        do {
+          contour.push(current);
+          visited.add(current[1] * width + current[0]);
+          current = findNextBoundaryPixel(selected, current[0], current[1], width, height, visited);
+        } while (current && (current[0] !== x || current[1] !== y));
+        if (contour.length > 0) {
+          outlineCtx.moveTo(contour[0][0], contour[0][1]);
+          for (let i = 1; i < contour.length; i++) {
+            outlineCtx.lineTo(contour[i][0], contour[i][1]);
+          }
+          outlineCtx.closePath();
           outlineCtx.stroke();
         }
       }
@@ -398,6 +453,8 @@ function setTool(tool) {
   document.querySelectorAll('.tool-button').forEach(btn => btn.classList.remove('active'));
   document.getElementById(`${tool}Tool`).classList.add('active');
   const canvas = document.getElementById('editCanvas');
+  const magicWandSettings = document.querySelector('.magic-wand-settings');
+  magicWandSettings.style.display = tool === 'magicWand' ? 'flex' : 'none';
   if (tool === 'fillSelection' && currentSelection) {
     fillSelection();
   } else if (tool === 'setAlpha' && currentSelection) {
@@ -480,6 +537,18 @@ function handleImageUpload(event) {
     reader.readAsDataURL(file);
   }
 }
+function findNextBoundaryPixel(selected, x, y, width, height, visited) {
+  const directions = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  for (const [dx, dy] of directions) {
+    const newX = x + dx;
+    const newY = y + dy;
+    const newPos = newY * width + newX;
+    if (newX >= 0 && newX < width && newY >= 0 && newY < height && selected[newPos] && !visited.has(newPos)) {
+      return [newX, newY];
+    }
+  }
+  return null;
+}
 document.getElementById('brushSize').addEventListener('input', function (e) {
   document.getElementById('brushSizeLabel').textContent = `${e.target.value}px`;
 });
@@ -500,6 +569,22 @@ document.getElementById('selectionOpacity').addEventListener('input', function (
     fillSelection();
   }
 });
-document.getElementById('imageUpload').addEventListener('change', handleImageUpload);</script>
+document.getElementById('imageUpload').addEventListener('change', handleImageUpload);
+document.getElementById('outlineWidth').addEventListener('input', function (e) {
+  document.getElementById('outlineWidthLabel').textContent = `Outline: ${e.target.value}px`;
+  if (currentSelection) {
+    drawSelectionOverlay(currentSelection);
+  }
+});
+document.getElementById('outlineStyle').addEventListener('change', function () {
+  if (currentSelection) {
+    drawSelectionOverlay(currentSelection);
+  }
+});
+document.getElementById('outlineColor').addEventListener('input', function () {
+  if (currentSelection) {
+    drawSelectionOverlay(currentSelection);
+  }
+});</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body></html>
