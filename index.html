@@ -162,6 +162,13 @@
     pointer-events: none;
     border: 1px dashed white;
   }
+
+  .overlay-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>
@@ -280,6 +287,12 @@ function setupCanvasListeners() {
     const [currentX, currentY] = getMousePos(canvas, e);
     const brushSize = document.getElementById('brushSize').value;
     const color = document.getElementById('colorPicker').value;
+    if (currentSelection) {
+      const pixelIndex = Math.floor(currentY) * canvas.width + Math.floor(currentX);
+      if (!currentSelection[pixelIndex]) {
+        return;
+      }
+    }
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.lineWidth = brushSize;
@@ -337,15 +350,23 @@ function drawSelectionOverlay(selected) {
   const width = canvas.width;
   const height = canvas.height;
   ctx.putImageData(originalImageData, 0, 0);
-  const imageData = ctx.getImageData(0, 0, width, height);
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = width;
+  overlayCanvas.height = height;
+  const overlayCtx = overlayCanvas.getContext('2d');
+  const imageData = overlayCtx.createImageData(width, height);
   const pixels = imageData.data;
   for (let i = 0; i < selected.length; i++) {
     if (selected[i]) {
       const pixelPos = i * 4;
-      pixels[pixelPos + 3] = Math.round(pixels[pixelPos + 3] * 0.5);
+      pixels[pixelPos] = 255;
+      pixels[pixelPos + 1] = 255;
+      pixels[pixelPos + 2] = 255;
+      pixels[pixelPos + 3] = 64;
     }
   }
-  ctx.putImageData(imageData, 0, 0);
+  overlayCtx.putImageData(imageData, 0, 0);
+  ctx.drawImage(overlayCanvas, 0, 0);
 }
 function getMousePos(canvas, e) {
   const rect = canvas.getBoundingClientRect();
@@ -389,22 +410,28 @@ function fillSelection() {
   const r = parseInt(color.substr(1, 2), 16);
   const g = parseInt(color.substr(3, 2), 16);
   const b = parseInt(color.substr(5, 2), 16);
+  const newImageData = new ImageData(width, height);
+  const newPixels = newImageData.data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    newPixels[i] = pixels[i];
+    newPixels[i + 1] = pixels[i + 1];
+    newPixels[i + 2] = pixels[i + 2];
+    newPixels[i + 3] = pixels[i + 3];
+  }
   for (let i = 0; i < currentSelection.length; i++) {
     if (currentSelection[i]) {
       const pixelPos = i * 4;
       if (opacity === 0) {
-        pixels[pixelPos + 3] = 0;
-      } else if (opacity < 1) {
-        pixels[pixelPos + 3] = Math.round(255 * opacity);
+        newPixels[pixelPos + 3] = 0;
       } else {
-        pixels[pixelPos] = r;
-        pixels[pixelPos + 1] = g;
-        pixels[pixelPos + 2] = b;
-        pixels[pixelPos + 3] = 255;
+        newPixels[pixelPos] = r;
+        newPixels[pixelPos + 1] = g;
+        newPixels[pixelPos + 2] = b;
+        newPixels[pixelPos + 3] = Math.round(255 * opacity);
       }
     }
   }
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(newImageData, 0, 0);
 }
 function clearSelection() {
   currentSelection = null;
