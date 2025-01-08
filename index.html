@@ -110,6 +110,8 @@
   </div>
 
   <script>
+    let imageCounter = 0;
+
     function generateImage() {
       const promptInput = document.getElementById('promptInput');
       const imageContainer = document.getElementById('imageContainer');
@@ -125,15 +127,13 @@
       loadingSpinner.style.display = 'block';
       placeholderText.style.display = 'none';
 
-      // Remove any existing image
-      const existingImage = document.getElementById('generatedImage');
-      if (existingImage) {
-        existingImage.remove();
-      }
+      // Remove any existing images
+      const existingImages = imageContainer.querySelectorAll('img');
+      existingImages.forEach(img => img.remove());
 
-      // Create new image element
+      // Create new image element with unique ID
       const generatedImage = document.createElement('img');
-      generatedImage.id = 'generatedImage';
+      generatedImage.id = `generatedImage_${imageCounter++}`;
       generatedImage.className = 'generated-image';
       generatedImage.style.display = 'none';
 
@@ -152,7 +152,6 @@
 
       // Handle image load error
       generatedImage.onerror = function() {
-        // Don't show error message, just keep trying to load the image
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
       };
