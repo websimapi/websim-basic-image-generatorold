@@ -128,12 +128,8 @@
       generatedImage.style.display = 'none';
       placeholderText.style.display = 'none';
 
-      // For demonstration, we'll use a placeholder image service
-      // In production, replace this with your actual image generation API
-      const imageUrl = `https://picsum.photos/800/600?random=${Date.now()}`;
-      
-      // Set the image source
-      generatedImage.src = imageUrl;
+      // Set the image source and alt to exactly the prompt text
+      generatedImage.src = promptInput.value;
       generatedImage.alt = promptInput.value;
 
       // Handle successful image load
@@ -144,10 +140,9 @@
 
       // Handle image load error
       generatedImage.onerror = function() {
+        // Don't show error message, just keep trying to load the image
         loadingSpinner.style.display = 'none';
-        placeholderText.style.display = 'block';
-        placeholderText.textContent = 'Failed to generate image. Please try again.';
-        generatedImage.style.display = 'none';
+        generatedImage.style.display = 'block';
       };
     }
 
