@@ -177,6 +177,8 @@
     <div class="input-group">
       <input type="text" id="promptInput" placeholder="Enter your image prompt here...">
       <button onclick="generateImage()">Generate</button>
+      <input type="file" id="imageUpload" accept="image/*" onchange="handleImageUpload(event)" style="display:none">
+      <button onclick="document.getElementById(&apos;imageUpload&apos;).click()">Upload Image</button>
     </div>
     <div class="image-container" id="imageContainer">
       <div id="loadingSpinner" class="loading" style="display: none;"></div>
@@ -361,7 +363,9 @@ function drawSelectionOverlay(selected) {
   const ctx = canvas.getContext('2d');
   const width = canvas.width;
   const height = canvas.height;
-  ctx.putImageData(originalImageData, 0, 0);
+  const currentImageData = ctx.getImageData(0, 0, width, height);
+  originalImageData = currentImageData;
+  ctx.putImageData(currentImageData, 0, 0);
   const outlineCanvas = document.createElement('canvas');
   outlineCanvas.width = width;
   outlineCanvas.height = height;
@@ -446,10 +450,35 @@ function fillSelection() {
     }
   }
   ctx.putImageData(imageData, 0, 0);
+  originalImageData = ctx.getImageData(0, 0, width, height);
 }
 function clearSelection() {
   currentSelection = null;
   resetImage();
+}
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const uploadedImage = document.createElement('img');
+      uploadedImage.id = `generatedImage_${imageCounter++}`;
+      uploadedImage.className = 'generated-image';
+      uploadedImage.style.display = 'none';
+      uploadedImage.crossOrigin = 'anonymous';
+      uploadedImage.src = e.target.result;
+      uploadedImage.alt = file.name;
+      const imageContainer = document.getElementById('imageContainer');
+      const existingImages = imageContainer.querySelectorAll('img');
+      existingImages.forEach(img => img.remove());
+      imageContainer.appendChild(uploadedImage);
+      uploadedImage.onload = function () {
+        currentImage = uploadedImage;
+        setupImageEditor();
+      };
+    };
+    reader.readAsDataURL(file);
+  }
 }
 document.getElementById('brushSize').addEventListener('input', function (e) {
   document.getElementById('brushSizeLabel').textContent = `${e.target.value}px`;
@@ -470,6 +499,7 @@ document.getElementById('selectionOpacity').addEventListener('input', function (
   if (currentSelection && currentTool === 'fillSelection') {
     fillSelection();
   }
-});</script>
+});
+document.getElementById('imageUpload').addEventListener('change', handleImageUpload);</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body></html>
