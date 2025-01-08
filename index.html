@@ -89,6 +89,11 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
+
+  .placeholder-text {
+    color: rgba(255,255,255,0.6);
+    font-size: 1.2rem;
+  }
 </style>
 </head>
 <body>
@@ -101,6 +106,7 @@
     <div class="image-container" id="imageContainer">
       <div id="loadingSpinner" class="loading" style="display: none;"></div>
       <img id="generatedImage" class="generated-image" style="display: none;">
+      <div id="placeholderText" class="placeholder-text">Enter a prompt to generate an image</div>
     </div>
   </div>
 
@@ -110,31 +116,38 @@
       const imageContainer = document.getElementById('imageContainer');
       const loadingSpinner = document.getElementById('loadingSpinner');
       const generatedImage = document.getElementById('generatedImage');
+      const placeholderText = document.getElementById('placeholderText');
       
       if (!promptInput.value.trim()) {
         alert('Please enter a prompt!');
         return;
       }
 
-      // Show loading spinner
+      // Show loading spinner and hide placeholder
       loadingSpinner.style.display = 'block';
       generatedImage.style.display = 'none';
+      placeholderText.style.display = 'none';
 
-      // Set the image source and alt to the prompt
-      generatedImage.src = promptInput.value;
+      // For demonstration, we'll use a placeholder image service
+      // In production, replace this with your actual image generation API
+      const imageUrl = `https://picsum.photos/800/600?random=${Date.now()}`;
+      
+      // Set the image source
+      generatedImage.src = imageUrl;
       generatedImage.alt = promptInput.value;
 
-      // Simulate loading time (remove this in production)
-      setTimeout(() => {
-        // Hide loading spinner and show image
+      // Handle successful image load
+      generatedImage.onload = function() {
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
-      }, 1000);
+      };
 
       // Handle image load error
       generatedImage.onerror = function() {
         loadingSpinner.style.display = 'none';
-        alert('Failed to generate image. Please try again.');
+        placeholderText.style.display = 'block';
+        placeholderText.textContent = 'Failed to generate image. Please try again.';
+        generatedImage.style.display = 'none';
       };
     }
 
