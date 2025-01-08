@@ -66,8 +66,36 @@
     border-radius: 10px;
     min-height: 300px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+  }
+
+  .editor-controls {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .color-picker {
+    padding: 0.5rem;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 5px;
+  }
+
+  .tolerance-slider {
+    width: 200px;
+    margin: 0 1rem;
+  }
+
+  canvas {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: 5px;
+    display: none;
   }
 
   .generated-image {
@@ -106,17 +134,28 @@
     <div class="image-container" id="imageContainer">
       <div id="loadingSpinner" class="loading" style="display: none;"></div>
       <div id="placeholderText" class="placeholder-text">Enter a prompt to generate an image</div>
+      <canvas id="editCanvas" style="display: none;"></canvas>
+      <div class="editor-controls" id="editorControls" style="display: none;">
+        <input type="color" id="colorPicker" class="color-picker" value="#ffffff">
+        <input type="range" id="toleranceSlider" class="tolerance-slider" min="0" max="100" value="30">
+        <button onclick="removeColor()">Remove Selected Color</button>
+        <button onclick="resetImage()">Reset Image</button>
+      </div>
     </div>
   </div>
 
   <script>
     let imageCounter = 0;
+    let originalImageData = null;
+    let currentImage = null;
 
     function generateImage() {
       const promptInput = document.getElementById('promptInput');
       const imageContainer = document.getElementById('imageContainer');
       const loadingSpinner = document.getElementById('loadingSpinner');
       const placeholderText = document.getElementById('placeholderText');
+      const editorControls = document.getElementById('editorControls');
+      const canvas = document.getElementById('editCanvas');
       
       if (!promptInput.value.trim()) {
         alert('Please enter a prompt!');
@@ -126,6 +165,8 @@
       // Show loading spinner and hide placeholder
       loadingSpinner.style.display = 'block';
       placeholderText.style.display = 'none';
+      editorControls.style.display = 'none';
+      canvas.style.display = 'none';
 
       // Remove any existing images
       const existingImages = imageContainer.querySelectorAll('img');
@@ -136,6 +177,7 @@
       generatedImage.id = `generatedImage_${imageCounter++}`;
       generatedImage.className = 'generated-image';
       generatedImage.style.display = 'none';
+      generatedImage.crossOrigin = 'anonymous';  // Enable CORS
 
       // Set the image source and alt to exactly the prompt text
       generatedImage.src = promptInput.value;
@@ -148,6 +190,8 @@
       generatedImage.onload = function() {
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
+        currentImage = generatedImage;
+        setupImageEditor();
       };
 
       // Handle image load error
@@ -155,6 +199,78 @@
         loadingSpinner.style.display = 'none';
         generatedImage.style.display = 'block';
       };
+    }
+
+    function setupImageEditor() {
+      const canvas = document.getElementById('editCanvas');
+      const ctx = canvas.getContext('2d');
+      const editorControls = document.getElementById('editorControls');
+
+      // Set canvas dimensions to match the image
+      canvas.width = currentImage.naturalWidth;
+      canvas.height = currentImage.naturalHeight;
+
+      // Draw image on canvas
+      ctx.drawImage(currentImage, 0, 0);
+
+      // Store original image data
+      originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // Show editor controls
+      editorControls.style.display = 'flex';
+      currentImage.style.display = 'none';
+      canvas.style.display = 'block';
+    }
+
+    function removeColor() {
+      const canvas = document.getElementById('editCanvas');
+      const ctx = canvas.getContext('2d');
+      const colorPicker = document.getElementById('colorPicker');
+      const toleranceSlider = document.getElementById('toleranceSlider');
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Convert selected color to RGB
+      const selectedColor = hexToRgb(colorPicker.value);
+      const tolerance = parseInt(toleranceSlider.value);
+
+      // Process each pixel
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        if (colorMatch(r, g, b, selectedColor.r, selectedColor.g, selectedColor.b, tolerance)) {
+          data[i + 3] = 0; // Set alpha to 0 (transparent)
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function resetImage() {
+      const canvas = document.getElementById('editCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.putImageData(originalImageData, 0, 0);
+    }
+
+    function hexToRgb(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+      } : null;
+    }
+
+    function colorMatch(r1, g1, b1, r2, g2, b2, tolerance) {
+      const diff = Math.sqrt(
+        Math.pow(r1 - r2, 2) +
+        Math.pow(g1 - g2, 2) +
+        Math.pow(b1 - b2, 2)
+      );
+      return diff <= tolerance;
     }
 
     // Allow Enter key to trigger generation
