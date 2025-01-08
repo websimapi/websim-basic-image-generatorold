@@ -342,7 +342,7 @@ function drawSelectionOverlay(selected) {
   for (let i = 0; i < selected.length; i++) {
     if (selected[i]) {
       const pixelPos = i * 4;
-      pixels[pixelPos + 3] = Math.min(pixels[pixelPos + 3], 128);
+      pixels[pixelPos + 3] = Math.round(pixels[pixelPos + 3] * 0.5);
     }
   }
   ctx.putImageData(imageData, 0, 0);
@@ -392,12 +392,15 @@ function fillSelection() {
   for (let i = 0; i < currentSelection.length; i++) {
     if (currentSelection[i]) {
       const pixelPos = i * 4;
-      if (opacity < 1) {
-        pixels[pixelPos + 3] = Math.round(pixels[pixelPos + 3] * opacity);
+      if (opacity === 0) {
+        pixels[pixelPos + 3] = 0;
+      } else if (opacity < 1) {
+        pixels[pixelPos + 3] = Math.round(255 * opacity);
       } else {
         pixels[pixelPos] = r;
         pixels[pixelPos + 1] = g;
         pixels[pixelPos + 2] = b;
+        pixels[pixelPos + 3] = 255;
       }
     }
   }
